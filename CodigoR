@@ -1,0 +1,142 @@
+#------------------------------ ###### ---------------------------------|
+#    -- ================================================================|
+#    -- Author:		    <Luis Rodriguez>           									      |
+#    -- Organization: <ITAM>                                            |
+#    -- Create date:  <30/07/2020>										                  |
+#    -- Last modification date:  <30/07/2020>							              |
+#    -- Description:	<Modulo Series Tiempo ITAM>                       |
+#    -- ================================================================|
+#------------------------------ ###### ---------------------------------|
+
+# INSTALAR LOS PAQUETES QUE NO TENGAS DISPONIBLES
+########                 Librerias, Descripción ########  
+
+library(dplyr)           # Grammar of Data Manipulation.
+library(tidyr)           # Easily Tidy Data with 'spread()' and 'gather()'. 
+library(dygraphs)        # Interactive Time Series.
+library(forecast)        # Forecasting Functions for Time Series and Linear Models.
+library(factoextra)      # Extract and Visualize the Results of Multivariate Data Analyses.
+library(ggplot2)         # Create Elegant Data Visualisations Using the Grammar of Graphics.
+library(ggthemes)        # This package contains extra themes for ggplot.
+library(ggfortify)       # Draw Some Popular Packages, Time Series.
+library(lubridate)       # Dates and times made easy with lubridate.
+library(plyr)            # The split-apply-combine paradigm for R.
+library(xts)             # Test For Time-Series Object.
+library(zoo)             # Infrastructure for Regular and Irregular Time Series.
+library(nortest)         # Five omnibus tests for testing the composite hypothesis of normality.
+
+################## DEFINIR RUTA DE ARCHIVOS ##################
+
+MiDirectorio <- "C:/Users/rodrigl2/OneDrive - Brambles/Desktop/Luis/ITAM/Series de Tiempo"
+setwd(MiDirectorio)
+
+################## CARGAR ARCHIVO ##################
+
+Automoviles <- read.csv("Automoviles.csv")
+
+# View(Automoviles)
+
+################## FORMATO DE FECHA ##################
+
+Automoviles$Periodos <- as.Date(zoo::as.yearmon(as.character(Automoviles$Periodos), "%Y/%m"))
+
+################## GRÁFICA ESTATICA DATOS ##################
+
+ggplot(data = Automoviles, aes(x = Periodos, y = Automoviles, group = 1))+
+  geom_line(color = "blue")+
+  theme_bw()+
+  scale_x_date(limits = as.Date(c("1988-01-01","2020-06-01")), 
+               date_breaks = "1 years",
+               date_minor_breaks = "1 months")+
+  theme(axis.text.x = element_text(angle = 75, hjust = 1))+
+  xlab("Periodos") +
+  ylab("Automoviles") +
+  ggtitle("Serie de Tiempo Automoviles")
+
+################## GRÁFICA DINAMICA DATOS ##################
+
+Automoviles_TS <- ts(Automoviles$Automoviles, start = decimal_date(lubridate::ymd("1988-01-01")), frequency = 12)
+Automoviles.xts <- xts(Automoviles_TS, date_decimal(index(Automoviles_TS)))
+
+dygraph(Automoviles.xts, "Serie de Tiempo Automoviles") %>%
+  dyRangeSelector()%>%
+  dyOptions(drawPoints = TRUE, pointSize = 2)
+
+################## AJUSTE MODELO, HISTOGRAMA Y PRUEBA DE NORMALIDAD ##################
+
+################## RECORTE DE PERIODOS A UTILIZAR ##################
+
+AutoReducido <- Automoviles%>%
+  dplyr::filter(Periodos >= "1995-04-01" & Periodos <= "2019-12-01")
+
+# View(AutoReducido)
+
+################## MODELO LINEAL ##################
+
+y <- AutoReducido$Automoviles
+# x <- AutoReducido$Periodos
+x <- c(1:nrow(AutoReducido))
+
+fit1 <- lm(y~x)
+
+plot(x,y, pch = 19, xlab = 'Peridos', ylab = 'Automoviles', type = "l")
+abline(fit1, col = 'red')
+
+summary(fit1)
+anova(fit1)
+
+################## MODELO POLINOMIAL ##################
+  
+x2 <- x^2
+x3 <- x^3
+x4 <- x^4
+x5 <- x^5
+
+fit5 <- lm(y~x+x2+x3+x4+x5)
+
+xv <- seq(min(x), max(x), 0.01)
+yv <- predict(fit5, list(x = xv, x2 = xv^2, x3 = xv^3, x4 = xv^4, x5 = xv^5))
+
+lines(xv, yv, col = 'blue')
+
+summary(fit5)
+anova(fit5)
+
+################## HISTOGRAMA ##################
+
+z <- AutoReducido$Automoviles
+
+h <- hist(z,  border = "blue", 
+          col = "skyblue", 
+          breaks = 20, 
+          main="Histograma Automoviles",
+          xlab="Automoviles",
+          prob = TRUE) # prob = TRUE,
+text(h$mids,h$counts,labels=h$counts, adj = c(0.5, -0.5))
+
+lines(density(z), lwd = 2, col = 'red')
+curve(dnorm(x, mean(z), sd(z)), lwd = 2, col = "black", add = T)
+legend("topleft", c("Curva datos", "Normal teórica"),
+       lty = 1, lwd = 2, col = c("red", "black"), bty = "n",
+       cex = 0.8)
+
+qqnorm(z)
+qqline(z)
+
+# Parametros 
+
+Media    <- mean(z)
+Mediana  <- median(z)
+DesEst   <- sd(z)
+Varianza <- var(z)
+
+Parametros <- c(Media, Mediana, DesEst, Varianza)
+names(Parametros) <- c('Media', 'Mediana', 'DesEst', 'Varianza')
+
+print(Parametros)
+
+################## PRUEBA DE NORMALIDAD LILLIEFORS ##################
+
+ks.test(z, pnorm, Media, DesEst, alternative = "two.sided")
+
+lillie.test(z)
